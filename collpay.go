@@ -40,25 +40,32 @@ type ExchangeRate struct {
 
 type Transaction struct {
 	ID string `json:"transaction_id"`
+	Type string `json:"type"`
 	OrderCurrency string `json:"order_currency"`
 	OrderAmountStr string `json:"order_amount"`
 	OrderAmount float64
 	PaymentCurrency string `json:"payment_currency"`
 	PaymentAmountStr string `json:"payment_amount"`
 	PaymentAmount float64
+	PayerName string `json:"payer_name"`
+	PayerEmail string `json:"payer_email"`
+	PayerPhone string `json:"payer_phone"`
+	PayerAddress string `json:"payer_address"`
 	CryptoAddress string `json:"crypto_address"`
 	ExchangeRateStr string `json:"exchange_rate"`
 	ExchangeRate float64
 	ExpiryDate time.Time `json:"expiry_date"`
 	HostedUrl string `json:"hosted_url"`
+	IpnUrl string `json:"ipn_url"`
+	SuccessUrl string `json:"success_url"`
+	CancelUrl string `json:"cancel_url"`
 	IpnSecret string `json:"ipn_secret"`
 	Status string `json:"status"`
 	Success bool
 	Message string
-	Event string `json:"event"`
+	WebhookEvent string `json:"event"`
 	Cart string `json:"cart"`
 	WebhookData string `json:"webhook_data"`
-	StatusDate time.Time `json:"status_date"`
 }
 
 var (
@@ -166,14 +173,34 @@ func GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error){
 	return &exch, nil
 }
 
-/*func CreateTransaction(fromCurrency, toCurrency string) (*ExchangeRate, error){
-	defer recoverPanic()
-
+func makeTransactionRequestData(transaction *Transaction) (url.Values) {
 	data := url.Values{}
-	data.Set("from", fromCurrency)
-	data.Set("to", toCurrency)
+	data.Set("type", "collpay")
+	data.Set("payment_currency", transaction.PaymentCurrency)
+	data.Set("order_currency", transaction.OrderCurrency)
+	if transaction.OrderAmount > 0 {
+		data.Set("order_amount", fmt.Sprint(transaction.OrderAmount))
+	} else {
+		data.Set("order_amount", transaction.OrderAmountStr)
+	}
+	data.Set("payer_name", transaction.PayerName)
+	data.Set("payer_email", transaction.PayerEmail)
+	data.Set("payer_phone", transaction.PayerPhone)
+	data.Set("payer_address", transaction.PayerAddress)
+	data.Set("ipn_url", transaction.IpnUrl)
+	data.Set("ipn_secret", transaction.IpnSecret)
+	data.Set("success_url", transaction.SuccessUrl)
+	data.Set("cancel_url", transaction.CancelUrl)
+	data.Set("cart", transaction.Cart)
+	data.Set("webhook_data", transaction.WebhookData)
+	return data
+}
 
-	req, err := http.NewRequest("POST", configData.baseUrl+"/exchange-rate", strings.NewReader(data.Encode()))
+func CreateTransaction(transaction *Transaction) (*Transaction, error){
+	defer recoverPanic()
+	data := makeTransactionRequestData(transaction)
+
+	req, err := http.NewRequest("POST", configData.baseUrl+"/transactions", strings.NewReader(data.Encode()))
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
@@ -181,20 +208,55 @@ func GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error){
 	setHeaders(req)
 	resBytes, err := doRequestAndGetResponse(req)
 
-	var respData ExchangeRate
+	var respData CommonData
 	err = json.Unmarshal(resBytes, &respData)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
 	}
 
-	if respData.Data.Rate != "" {
-		respData.Rate, err = strconv.ParseFloat(respData.Data.Rate, 64)
+	dataBytes, err := json.Marshal(respData.Data)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	var tr Transaction
+	err = json.Unmarshal(dataBytes, &tr)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	tr.Success = respData.Success
+	tr.Message = respData.Message
+
+	if tr.Success {
+		err = processFloatFields(&tr)
 		if err != nil {
-			log.Println(err.Error())
 			return nil, err
 		}
 	}
 
-	return &respData, nil
-}*/
+	return &tr, nil
+}
+
+func processFloatFields(tr *Transaction) error {
+	var err error
+	tr.OrderAmount, err = strconv.ParseFloat(tr.OrderAmountStr, 64)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	tr.PaymentAmount, err = strconv.ParseFloat(tr.PaymentAmountStr, 64)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	tr.ExchangeRate, err = strconv.ParseFloat(tr.ExchangeRateStr, 64)
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+	return nil
+}
