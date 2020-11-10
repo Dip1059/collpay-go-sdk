@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -24,15 +25,40 @@ type Config struct {
 	baseUrl string
 }
 
-type ExchangeRate struct {
+type CommonData struct {
 	Success bool `json:"success"`
 	Message string `json:"message"`
-	Rate float64
-	Data ExchangeRateData `json:"data"`
+	Data interface{} `json:"data"`
 }
 
-type ExchangeRateData struct {
-	Rate string `json:"rate"`
+type ExchangeRate struct {
+	Success bool
+	Message string
+	RateStr string `json:"rate"`
+	Rate float64
+}
+
+type Transaction struct {
+	ID string `json:"transaction_id"`
+	OrderCurrency string `json:"order_currency"`
+	OrderAmountStr string `json:"order_amount"`
+	OrderAmount float64
+	PaymentCurrency string `json:"payment_currency"`
+	PaymentAmountStr string `json:"payment_amount"`
+	PaymentAmount float64
+	CryptoAddress string `json:"crypto_address"`
+	ExchangeRateStr string `json:"exchange_rate"`
+	ExchangeRate float64
+	ExpiryDate time.Time `json:"expiry_date"`
+	HostedUrl string `json:"hosted_url"`
+	IpnSecret string `json:"ipn_secret"`
+	Status string `json:"status"`
+	Success bool
+	Message string
+	Event string `json:"event"`
+	Cart string `json:"cart"`
+	WebhookData string `json:"webhook_data"`
+	StatusDate time.Time `json:"status_date"`
 }
 
 var (
@@ -94,6 +120,54 @@ func doRequestAndGetResponse(req *http.Request) ([]byte, error){
 
 func GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error){
 	defer recoverPanic()
+	data := url.Values{}
+	data.Set("from", fromCurrency)
+	data.Set("to", toCurrency)
+
+	req, err := http.NewRequest("POST", configData.baseUrl+"/exchange-rate", strings.NewReader(data.Encode()))
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+	setHeaders(req)
+	resBytes, err := doRequestAndGetResponse(req)
+
+	var respData CommonData
+	err = json.Unmarshal(resBytes, &respData)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	dataBytes, err := json.Marshal(respData.Data)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	var exch ExchangeRate
+	err = json.Unmarshal(dataBytes, &exch)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	exch.Success = respData.Success
+	exch.Message = respData.Message
+
+	if exch.RateStr != "" {
+		exch.Rate, err = strconv.ParseFloat(exch.RateStr, 64)
+		if err != nil {
+			log.Println(err.Error())
+			return nil, err
+		}
+	}
+
+	return &exch, nil
+}
+
+/*func CreateTransaction(fromCurrency, toCurrency string) (*ExchangeRate, error){
+	defer recoverPanic()
 
 	data := url.Values{}
 	data.Set("from", fromCurrency)
@@ -123,4 +197,4 @@ func GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error){
 	}
 
 	return &respData, nil
-}
+}*/
