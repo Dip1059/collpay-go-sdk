@@ -54,6 +54,11 @@ func doRequestAndGetResponse(req *http.Request) ([]byte, error){
 		return nil, err
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("%s", resp.Status)
+		return nil, err
+	}
+
 	resBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Println(err.Error())
@@ -86,21 +91,24 @@ func GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error){
 		return nil, err
 	}
 
+	var exch ExchangeRate
+	exch.Success = respData.Success
+	exch.Message = respData.Message
+	if !exch.Success {
+		return &exch, nil
+	}
+
 	dataBytes, err := json.Marshal(respData.Data)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
 	}
 
-	var exch ExchangeRate
 	err = json.Unmarshal(dataBytes, &exch)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
 	}
-
-	exch.Success = respData.Success
-	exch.Message = respData.Message
 
 	if exch.RateStr != "" {
 		exch.Rate, err = strconv.ParseFloat(exch.RateStr, 64)
@@ -159,21 +167,24 @@ func CreateTransaction(tr *Transaction) (*Transaction, error){
 		return nil, err
 	}
 
+	if !respData.Success {
+		tr = nil
+		return &Transaction{Success: respData.Success, Message: respData.Message}, nil
+	}
+	tr.Success = respData.Success
+	tr.Message = respData.Message
+
 	dataBytes, err := json.Marshal(respData.Data)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
 	}
 
-	//var tr Transaction
 	err = json.Unmarshal(dataBytes, tr)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
 	}
-
-	tr.Success = respData.Success
-	tr.Message = respData.Message
 
 	if tr.Success {
 		err = processTransactionFloatFields(tr)
@@ -187,6 +198,9 @@ func CreateTransaction(tr *Transaction) (*Transaction, error){
 
 func GetTransaction(transactionId string) (*Transaction, error){
 	defer recoverPanic()
+	if transactionId == "" {
+		return nil, fmt.Errorf("%s", "Transaction ID can't be empty.")
+	}
 
 	req, err := http.NewRequest("GET", configData.baseUrl+"/transactions/"+transactionId, nil)
 	if err != nil {
@@ -207,21 +221,24 @@ func GetTransaction(transactionId string) (*Transaction, error){
 		return nil, err
 	}
 
+	var tr Transaction
+	tr.Success = respData.Success
+	tr.Message = respData.Message
+	if !tr.Success {
+		return &tr, nil
+	}
+
 	dataBytes, err := json.Marshal(respData.Data)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
 	}
 
-	var tr Transaction
 	err = json.Unmarshal(dataBytes, &tr)
 	if err != nil {
 		log.Println(err.Error())
 		return nil, err
 	}
-
-	tr.Success = respData.Success
-	tr.Message = respData.Message
 
 	if tr.Success {
 		err = processTransactionFloatFields(&tr)
