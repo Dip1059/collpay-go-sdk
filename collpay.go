@@ -9,69 +9,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
-)
-
-const (
-	ENV_PRODUCTION = 1;
-	ENV_SANDBOX = 2
-	V1 = "v1"
-)
-
-type Config struct {
-	PublicKey string //Merchant's public key
-	Env uint //Environment: sandbox or production
-	Version string //Api version, ex:v1
-	baseUrl string
-}
-
-type CommonData struct {
-	Success bool `json:"success"`
-	Message string `json:"message"`
-	Data interface{} `json:"data"`
-}
-
-type ExchangeRate struct {
-	Success bool
-	Message string
-	RateStr string `json:"rate"`
-	Rate float64
-}
-
-type Transaction struct {
-	ID string `json:"transaction_id"`
-	Type string `json:"type"`
-	OrderCurrency string `json:"order_currency"`
-	OrderAmountStr string `json:"order_amount"`
-	OrderAmount float64
-	PaymentCurrency string `json:"payment_currency"`
-	PaymentAmountStr string `json:"payment_amount"`
-	PaymentAmount float64
-	PayerName string `json:"payer_name"`
-	PayerEmail string `json:"payer_email"`
-	PayerPhone string `json:"payer_phone"`
-	PayerAddress string `json:"payer_address"`
-	CryptoAddress string `json:"crypto_address"`
-	ExchangeRateStr string `json:"exchange_rate"`
-	ExchangeRate float64
-	ExpiryDate time.Time `json:"expiry_date"`
-	HostedUrl string `json:"hosted_url"`
-	IpnUrl string `json:"ipn_url"`
-	SuccessUrl string `json:"success_url"`
-	CancelUrl string `json:"cancel_url"`
-	IpnSecret string `json:"ipn_secret"`
-	Status string `json:"status"`
-	Success bool
-	Message string
-	WebhookEvent string `json:"event"`
-	Cart string `json:"cart"`
-	WebhookData string `json:"webhook_data"`
-}
-
-var (
-	productionBaseUrl = "http://localhost:8000/api/";
-	sandBoxBaseUrl = "https://collpay-dev.dev03.squaredbyte.com/api/";
-	configData *Config
 )
 
 func recoverPanic() {
@@ -138,6 +75,9 @@ func GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error){
 	}
 	setHeaders(req)
 	resBytes, err := doRequestAndGetResponse(req)
+	if err != nil {
+		return nil, err
+	}
 
 	var respData CommonData
 	err = json.Unmarshal(resBytes, &respData)
@@ -196,9 +136,9 @@ func makeTransactionRequestData(transaction *Transaction) (url.Values) {
 	return data
 }
 
-func CreateTransaction(transaction *Transaction) (*Transaction, error){
+func CreateTransaction(tr *Transaction) (*Transaction, error){
 	defer recoverPanic()
-	data := makeTransactionRequestData(transaction)
+	data := makeTransactionRequestData(tr)
 
 	req, err := http.NewRequest("POST", configData.baseUrl+"/transactions", strings.NewReader(data.Encode()))
 	if err != nil {
@@ -207,6 +147,58 @@ func CreateTransaction(transaction *Transaction) (*Transaction, error){
 	}
 	setHeaders(req)
 	resBytes, err := doRequestAndGetResponse(req)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	var respData CommonData
+	err = json.Unmarshal(resBytes, &respData)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	dataBytes, err := json.Marshal(respData.Data)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	//var tr Transaction
+	err = json.Unmarshal(dataBytes, tr)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+
+	tr.Success = respData.Success
+	tr.Message = respData.Message
+
+	if tr.Success {
+		err = processTransactionFloatFields(tr)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return tr, nil
+}
+
+func GetTransaction(transactionId string) (*Transaction, error){
+	defer recoverPanic()
+
+	req, err := http.NewRequest("GET", configData.baseUrl+"/transactions/"+transactionId, nil)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
+	setHeaders(req)
+	resBytes, err := doRequestAndGetResponse(req)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
+	}
 
 	var respData CommonData
 	err = json.Unmarshal(resBytes, &respData)
@@ -232,7 +224,7 @@ func CreateTransaction(transaction *Transaction) (*Transaction, error){
 	tr.Message = respData.Message
 
 	if tr.Success {
-		err = processFloatFields(&tr)
+		err = processTransactionFloatFields(&tr)
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +233,7 @@ func CreateTransaction(transaction *Transaction) (*Transaction, error){
 	return &tr, nil
 }
 
-func processFloatFields(tr *Transaction) error {
+func processTransactionFloatFields(tr *Transaction) error {
 	var err error
 	tr.OrderAmount, err = strconv.ParseFloat(tr.OrderAmountStr, 64)
 	if err != nil {
