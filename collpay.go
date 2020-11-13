@@ -22,7 +22,15 @@ func recoverPanic() {
 	}
 }
 
-func ConfigureEnv(config *Config) {
+func ConfigureEnv(config *Config) error {
+	if config == nil {
+		return fmt.Errorf("%s","Config can't be nil.")
+	}
+
+	if config.PublicKey == "" {
+		return fmt.Errorf("%s","Public key can't be empty.")
+	}
+
 	configData = config
 	switch configData.Env {
 		case ENV_SANDBOX:
@@ -38,6 +46,8 @@ func ConfigureEnv(config *Config) {
 		configData.Version = V1
 	}
 	configData.baseUrl += configData.Version
+
+	return nil
 }
 
 func setHeaders(req *http.Request) {
@@ -47,6 +57,9 @@ func setHeaders(req *http.Request) {
 }
 
 func doRequestAndGetResponse(req *http.Request) ([]byte, error){
+	if req == nil {
+		return nil, fmt.Errorf("%s", "Request can't be nil")
+	}
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -146,8 +159,10 @@ func makeTransactionRequestData(transaction *Transaction) (url.Values) {
 
 func CreateTransaction(tr *Transaction) (*Transaction, error){
 	defer recoverPanic()
+	if tr == nil {
+		return nil, fmt.Errorf("%s","Transaction can't be nil.")
+	}
 	data := makeTransactionRequestData(tr)
-
 	req, err := http.NewRequest("POST", configData.baseUrl+"/transactions", strings.NewReader(data.Encode()))
 	if err != nil {
 		log.Println(err.Error())
