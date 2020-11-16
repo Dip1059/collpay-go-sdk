@@ -1,1 +1,1 @@
-**This the official golang sdk for Collpay Payment Gateway**
+**This is the official golang sdk for Collpay Payment Gateway**

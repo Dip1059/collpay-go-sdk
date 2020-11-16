@@ -22,6 +22,7 @@ func recoverPanic() {
 	}
 }
 
+//Environment Configuration
 func ConfigureEnv(config *Config) error {
 	if config == nil {
 		return fmt.Errorf("%s","Config can't be nil.")
@@ -157,6 +158,7 @@ func makeTransactionRequestData(transaction *Transaction) (url.Values) {
 	return data
 }
 
+//Create Transaction
 func CreateTransaction(tr *Transaction) (*Transaction, error){
 	defer recoverPanic()
 	if tr == nil {
@@ -211,6 +213,7 @@ func CreateTransaction(tr *Transaction) (*Transaction, error){
 	return tr, nil
 }
 
+//Get Transaction by ID
 func GetTransaction(transactionId string) (*Transaction, error){
 	defer recoverPanic()
 	if transactionId == "" {
