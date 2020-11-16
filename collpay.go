@@ -81,9 +81,9 @@ func doRequestAndGetResponse(req *http.Request) ([]byte, error){
 	return resBytes, nil
 }
 
-//Get Exchange rate by from currency code and to currency code
-//from currency code will be in capital form
-//rate example: GetExchangeRate("USD", "BTC"), you will get rate like 1 USD = 0.00006160 BTC
+//Get Exchange rate by from currency code and to currency code.\n
+//from currency code will be in capital form.\n
+//rate example: GetExchangeRate("USD", "BTC"), you will get rate like 1 USD = 0.00006160 BTC.
 func GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error){
 	defer recoverPanic()
 	data := url.Values{}
